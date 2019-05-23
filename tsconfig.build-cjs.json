@@ -4,6 +4,6 @@
     "noEmit": false,
     "outDir": "dist/cjs"
   },
-  "exclude": ["test/**/*"],
+  "exclude": ["__tests__/**/*"],
   "extends": "./tsconfig.json"
 }
