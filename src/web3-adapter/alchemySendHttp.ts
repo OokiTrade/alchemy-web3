@@ -1,21 +1,18 @@
-import fetchPonyfill from "fetch-ponyfill";
-import { VERSION } from "../version";
 import { AlchemySendFunction } from "./alchemySend";
+import { fetchAsync } from '@0x/utils';
 
-const { fetch, Headers } = fetchPonyfill();
 
 const ALCHEMY_HEADERS = new Headers({
   Accept: "application/json",
-  "Content-Type": "application/json",
-  "Alchemy-Web3-Version": VERSION,
+  "Content-Type": "application/json"
 });
 const RATE_LIMIT_STATUS = 429;
 
 export function makeHttpSender(url: string): AlchemySendFunction {
   return async request => {
-    const response = await fetch(url, {
+    const response = await fetchAsync(url, {
       method: "POST",
-      headers: ALCHEMY_HEADERS,
+      headers: {...ALCHEMY_HEADERS},
       body: JSON.stringify(request),
     });
     const { status } = response;

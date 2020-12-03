@@ -1,5 +1,6 @@
 import { fromHex, toHex } from "../util/hex";
 import { BatchPart, JsonRpcSenders } from "../util/jsonRpc";
+import { throwIfCancelled } from "../util/promises";
 
 export interface NewHeadsEvent {
   author: string;
@@ -68,10 +69,13 @@ export function makeBackfiller(senders: JsonRpcSenders) {
   return { getNewHeadsBackfill, getLogsBackfill };
 
   async function getNewHeadsBackfill(
+    isCancelled: () => boolean,
     previousHeads: NewHeadsEvent[],
     fromBlockNumber: number,
-    toBlockNumber: number,
   ): Promise<NewHeadsEvent[]> {
+    throwIfCancelled(isCancelled);
+    const toBlockNumber = await getBlockNumber();
+    throwIfCancelled(isCancelled);
     if (previousHeads.length === 0) {
       return getHeadEventsInRange(
         Math.max(fromBlockNumber, toBlockNumber - MAX_BACKFILL_BLOCKS) + 1,
@@ -88,21 +92,28 @@ export function makeBackfiller(senders: JsonRpcSenders) {
     if (lastSeenBlockNumber < minBlockNumber) {
       return getHeadEventsInRange(minBlockNumber, toBlockNumber + 1);
     }
-    const reorgHeads: NewHeadsEvent[] = await getReorgHeads(previousHeads);
+    const reorgHeads: NewHeadsEvent[] = await getReorgHeads(
+      isCancelled,
+      previousHeads,
+    );
+    throwIfCancelled(isCancelled);
     const intermediateHeads: NewHeadsEvent[] = await getHeadEventsInRange(
       lastSeenBlockNumber + 1,
       toBlockNumber + 1,
     );
+    throwIfCancelled(isCancelled);
     return [...reorgHeads, ...intermediateHeads];
   }
 
   async function getReorgHeads(
+    isCancelled: () => boolean,
     previousHeads: NewHeadsEvent[],
   ): Promise<NewHeadsEvent[]> {
     const result: NewHeadsEvent[] = [];
     for (let i = previousHeads.length - 1; i >= 0; i--) {
       const oldEvent = previousHeads[i];
       const blockHead = await getBlockByNumber(fromHex(oldEvent.number));
+      throwIfCancelled(isCancelled);
       if (oldEvent.hash === blockHead.hash) {
         break;
       }
@@ -115,6 +126,9 @@ export function makeBackfiller(senders: JsonRpcSenders) {
     fromBlockInclusive: number,
     toBlockExclusive: number,
   ): Promise<NewHeadsEvent[]> {
+    if (fromBlockInclusive >= toBlockExclusive) {
+      return [];
+    }
     const batchParts: BatchPart[] = [];
     for (let i = fromBlockInclusive; i < toBlockExclusive; i++) {
       batchParts.push({
@@ -131,11 +145,14 @@ export function makeBackfiller(senders: JsonRpcSenders) {
   }
 
   async function getLogsBackfill(
+    isCancelled: () => boolean,
     filter: LogsSubscriptionFilter,
     previousLogs: LogsEvent[],
     fromBlockNumber: number,
-    toBlockNumber: number,
   ): Promise<LogsEvent[]> {
+    throwIfCancelled(isCancelled);
+    const toBlockNumber = await getBlockNumber();
+    throwIfCancelled(isCancelled);
     if (previousLogs.length === 0) {
       return getLogsInRange(
         filter,
@@ -153,7 +170,11 @@ export function makeBackfiller(senders: JsonRpcSenders) {
     if (lastSeenBlockNumber < minBlockNumber) {
       return getLogsInRange(filter, minBlockNumber, toBlockNumber + 1);
     }
-    const commonAncestorNumber = await getCommonAncestorNumber(previousLogs);
+    const commonAncestorNumber = await getCommonAncestorNumber(
+      isCancelled,
+      previousLogs,
+    );
+    throwIfCancelled(isCancelled);
     const removedLogs = previousLogs
       .filter(log => fromHex(log.blockNumber) > commonAncestorNumber)
       .map(log => ({ ...log, removed: true }));
@@ -162,15 +183,18 @@ export function makeBackfiller(senders: JsonRpcSenders) {
       commonAncestorNumber + 1,
       toBlockNumber + 1,
     );
+    throwIfCancelled(isCancelled);
     return [...removedLogs, ...addedLogs];
   }
 
   async function getCommonAncestorNumber(
+    isCancelled: () => boolean,
     previousLogs: LogsEvent[],
   ): Promise<number> {
     for (let i = previousLogs.length - 1; i >= 0; i--) {
       const { blockHash, blockNumber } = previousLogs[i];
       const { hash } = await getBlockByNumber(fromHex(blockNumber));
+      throwIfCancelled(isCancelled);
       if (blockHash === hash) {
         return fromHex(blockNumber);
       }
@@ -178,17 +202,25 @@ export function makeBackfiller(senders: JsonRpcSenders) {
     return Number.NEGATIVE_INFINITY;
   }
 
-  function getLogsInRange(
+  async function getLogsInRange(
     filter: LogsSubscriptionFilter,
     fromBlockInclusive: number,
     toBlockExclusive: number,
   ): Promise<LogsEvent[]> {
+    if (fromBlockInclusive >= toBlockExclusive) {
+      return [];
+    }
     const rangeFilter: GetLogsOptions = {
       ...filter,
       fromBlock: toHex(fromBlockInclusive),
       toBlock: toHex(toBlockExclusive - 1),
     };
     return senders.send("eth_getLogs", [rangeFilter]);
+  }
+
+  async function getBlockNumber(): Promise<number> {
+    const blockNumberHex: string = await senders.send("eth_blockNumber");
+    return fromHex(blockNumberHex);
   }
 }
 
