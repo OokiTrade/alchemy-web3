@@ -62,7 +62,7 @@
     "typescript": "^3.7.5"
   },
   "dependencies": {
-    "@0x/subproviders": "^5.0.4",
+    "@0x/subproviders": "^6.5.3",
     "@types/web3": "^1.0.18",
     "assert-never": "^1.2.0",
     "eventemitter3": "^3.1.2",
