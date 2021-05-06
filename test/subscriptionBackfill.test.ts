@@ -10,6 +10,7 @@ import { Mocked } from "./testUtils";
 
 let senders: Mocked<JsonRpcSenders>;
 let getNewHeadsBackfill: Backfiller["getNewHeadsBackfill"];
+const isCancelled = () => false;
 
 beforeEach(() => {
   senders = { send: jest.fn(), sendBatch: jest.fn() };
@@ -23,8 +24,9 @@ describe("getNewHeadsBackfill", () => {
       makeNewHeadsEvent(11, "b"),
       makeNewHeadsEvent(12, "c"),
     ];
+    senders.send.mockResolvedValue(toHex(12));
     senders.sendBatch.mockResolvedValue(heads);
-    const result = await getNewHeadsBackfill([], 9, 12);
+    const result = await getNewHeadsBackfill(isCancelled, [], 9);
     expect(result).toEqual(heads);
     expectGetBlockRangeCalled(10, 13);
   });
@@ -36,8 +38,10 @@ describe("getNewHeadsBackfill", () => {
     ];
     const expected = [makeNewHeadsEvent(12, "c"), makeNewHeadsEvent(13, "d")];
     senders.sendBatch.mockResolvedValue(expected);
-    senders.send.mockReturnValue(Promise.resolve(makeNewHeadsEvent(11, "b")));
-    const result = await getNewHeadsBackfill(previousHeads, 9, 13);
+    senders.send
+      .mockResolvedValueOnce(toHex(13))
+      .mockResolvedValueOnce(makeNewHeadsEvent(11, "b"));
+    const result = await getNewHeadsBackfill(isCancelled, previousHeads, 9);
     expectGetBlockCalled(11);
     expectGetBlockRangeCalled(12, 14);
     expect(result).toEqual(expected);
@@ -52,10 +56,11 @@ describe("getNewHeadsBackfill", () => {
     const newHeads = [makeNewHeadsEvent(13, "d"), makeNewHeadsEvent(14, "e")];
     senders.sendBatch.mockResolvedValue(newHeads);
     senders.send
+      .mockResolvedValueOnce(toHex(14))
       .mockResolvedValueOnce(makeNewHeadsEvent(12, "c'"))
       .mockResolvedValueOnce(makeNewHeadsEvent(11, "b'"))
       .mockResolvedValueOnce(makeNewHeadsEvent(10, "a"));
-    const result = await getNewHeadsBackfill(previousHeads, 9, 14);
+    const result = await getNewHeadsBackfill(isCancelled, previousHeads, 9);
     const expected = [
       makeNewHeadsEvent(11, "b'"),
       makeNewHeadsEvent(12, "c'"),
@@ -78,10 +83,11 @@ describe("getNewHeadsBackfill", () => {
     const newHeads = [makeNewHeadsEvent(13, "d"), makeNewHeadsEvent(14, "e")];
     senders.sendBatch.mockResolvedValue(newHeads);
     senders.send
+      .mockResolvedValueOnce(toHex(14))
       .mockResolvedValueOnce(makeNewHeadsEvent(12, "c'"))
       .mockResolvedValueOnce(makeNewHeadsEvent(11, "b'"))
       .mockResolvedValueOnce(makeNewHeadsEvent(10, "a'"));
-    const result = await getNewHeadsBackfill(previousHeads, 9, 14);
+    const result = await getNewHeadsBackfill(isCancelled, previousHeads, 9);
     const expected = [
       makeNewHeadsEvent(10, "a'"),
       makeNewHeadsEvent(11, "b'"),

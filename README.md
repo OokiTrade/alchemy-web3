@@ -56,7 +56,7 @@ import { createAlchemyWeb3 } from "@alch/alchemy-web3";
 
 // Using HTTPS
 const web3 = createAlchemyWeb3(
-  "https://eth-mainnet.alchemyapi.io/jsonrpc/<api-key>",
+  "https://eth-mainnet.alchemyapi.io/v2/<api-key>",
 );
 ```
 
@@ -96,9 +96,9 @@ web3.eth
 If the user has a provider in their browser available at `window.ethereum`, then
 any methods which involve user accounts or signing will automatically use it.
 This provider might be injected by [Metamask](https://metamask.io/), [Trust
-Wallet](https://trustwallet.com/dapp), or other browsers or browser extensions
-if the user has them installed. For example, the following will use a provider
-from the user's browser:
+Wallet](https://trustwallet.com/dapp) or other browsers or browser extensions if
+the user has them installed. For example, the following will use a provider from
+the user's browser:
 
 ```ts
 web3.eth.getAccounts().then(accounts => {
@@ -200,7 +200,7 @@ subscriptions using `web3.eth.subscribe()`, Alchemy Web3 will bring the
 following advantages over standard Web3 subscriptions:
 
 - Unlike standard Web3, you will not permanently miss events which arrive while
-  the backing WebSocket is temporarily down. Instead, you will receive thees
+  the backing WebSocket is temporarily down. Instead, you will receive these
   events as soon as the connection is reopened. Note that if the connection is
   down for more than 120 blocks (approximately 20 minutes), you may still miss
   some events that were not part of the most recent 120 blocks.
@@ -211,9 +211,52 @@ following advantages over standard Web3 subscriptions:
   with a lower likelihood, for outgoing requests to be lost, so you should still
   have error handling as with any network request.
 
-## Alchemy Higher Level API
+## Alchemy's Transfers API
 
-The produced client also grants easy access to Alchemy's [higher level API](https://docs.alchemyapi.io/docs/higher-level-api).
+The produced client also grants easy access to Alchemy's [transfer API](https://docs.alchemyapi.io/documentation/alchemy-api-reference/transfers-api).
+
+### `web3.alchemy.getAssetTransfers({fromBlock, toBlock, fromAddress, toAddress, contractAddresses, excludeZeroValue, maxCount, category, pageKey})`
+
+Returns an array of asset transfers based on the specified parameters.
+
+**Parameters:**
+
+An object with the following fields:
+
+- `fromBlock`: Optional inclusive from hex string block (default latest)
+- `toBlock`: Optional inclusive to hex string block (default latest)
+- `fromAddress`: Optional from hex string address (default wildcard)
+- `toAddress`: Optional to hex string address (default wildcard)
+  NOTE: `fromAddress` is ANDed with `toAddress`
+- `contractAddresses`: Optional array of hex string contract addresses for "token" transfers (default wildcard)
+  NOTE: `contractAddresses` are ORed together
+- `excludeZeroValue`: Optional boolean to exclude transfers with zero value (default true)
+- `maxCount`: Optional number to restrict payload size (default and max of 1000)
+- `category`: Optional array of categories (default all categories ["external", "internal", "token"])
+- `pageKey`: Optional uuid pageKey to retrieve the next payload
+
+**Returns:**
+
+An object with the following fields:
+
+- `pageKey`: Uuid for next page of results (undefined for the last page of results).
+- `transfers`: An array of objects with the following fields sorted in ascending order by block number
+  - `category`: "external", "internal" or "token" - label for the transfer
+  - `blockNum`: The block where the transfer occurred (hex string).
+  - `from`: From address of transfer (hex string).
+  - `to`: To address of transfer (hex string). `null` if contract creation.
+  - `value`: Converted asset transfer value as a number (raw value divided by contract decimal). `null` if erc721 transfer or contract decimal not available.
+  - `erc721TokenId`: Raw erc721 token id (hex string). `null` if not an erc721 "token" transfer
+  - `asset`: "ETH" or the token's symbol. `null` if not defined in the contract and not available from other sources.
+  - `hash`: Transaction hash (hex string).
+  - `rawContract`: Object of raw values:
+    - `value`: Raw transfer value (hex string). `null` if erc721 transfer
+    - `address`: Contract address (hex string). `null` if "external" or "internal"
+    - `decimal`: Contract decimal (hex string). `null` if not defined in the contract and not available from other sources.
+
+## Alchemy's Enhanced API
+
+The produced client also grants easy access to Alchemy's [enhanced API](https://docs.alchemyapi.io/documentation/alchemy-web3/enhanced-web3-api).
 
 ### `web3.alchemy.getTokenAllowance({contract, owner, spender})`
 
@@ -267,6 +310,20 @@ An object with the following fields:
 - `symbol`: The token's symbol. `null` if not defined in the contract and not available from other sources.
 - `decimals`: The token's decimals. `null` if not defined in the contract and not available from other sources.
 - `logo`: URL of the token's logo image. `null` if not available.
+
+### `web3.eth.subscribe("alchemy_fullPendingTransactions")`
+
+Subscribes to pending transactions, similar to the standard Web3 call
+`web3.eth.subscribe("pendingTransactions")`, but differs in that it emits
+full transaction information rather than just transaction hashes.
+
+Note that the argument passed to this function is
+`"alchemy_fullPendingTransactions"`, which is different from the string used in
+raw `eth_subscribe` JSON-RPC calls, where it is
+`"alchemy_newFullPendingTransactions"` instead. This is confusing, but it is
+also consistent with the existing Web3 subscription APIs (for example:
+`web3.eth.subscribe("pendingTransactions")` vs `"newPendingTransactions"` in raw
+JSON-RPC).
 
 <br/>
 
